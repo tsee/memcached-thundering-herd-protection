@@ -43,7 +43,9 @@ use warnings;
 # [1] I am of the firm (and learned) opinion that when you're in such
 #     a situation, your cache is no longer strictly a cache and memcached
 #     is no longer the appropriate technology to use.
-# [2] https://bitbucket.org/zzzeek/dogpile.cache/
+# [2] See https://github.com/ericflo/django-newcache
+#     and https://bitbucket.org/zzzeek/dogpile.cache/ for examples of
+#     prior art.
 
 use Cache::Memcached::Fast;
 use Sereal::Encoder;
