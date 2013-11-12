@@ -1,0 +1,7 @@
+- Document properly
+- Make it a module
+- Debug partial failure in certain circumstances
+- Optimize
+- Consider API carefully
+- Implement multi_ variant if at all possible (ick!)
+
