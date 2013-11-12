@@ -58,11 +58,8 @@ my $memd = Cache::Memcached::Fast->new({
   servers             => [ { address => 'localhost:11211', weight => 1.0 } ],
   ketama_points       => 150,
   nowait              => 0,
-  hash_namespace      => 1,
   compress_threshold  => 1e99,
   serialize_methods   => [ sub {$enc->encode($_[0])}, sub {$dec->decode($_[0])} ],
-  utf8                => ($^V ge v5.8.1 ? 1 : 0),
-  max_size            => 512 * 1024,
 });
 
 use constant THUNDER_TIMEOUT => 2;
