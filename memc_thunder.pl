@@ -112,6 +112,10 @@ sub cache_get_or_compute {
         # *Attempt* to become the one to fill the cache.
         return _try_to_compute($memd, \%args);
       }
+      elsif ($cas_val->[1][PROC_FLAG_IDX]) {
+        # Somebody else is now working on it.
+        return $args{wait}->($memd, \%args);
+      }
       else {
         my $placeholder = [BEING_PROCESSED, 0];
         $cas_val->[1] = $placeholder;
