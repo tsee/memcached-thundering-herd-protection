@@ -110,7 +110,7 @@ sub cache_get_or_compute {
       if (not defined $cas_val) {
         # Must have been deleted/evicted in the meantime.
         # *Attempt* to become the one to fill the cache.
-        _try_to_compute($memd, \%args);
+        return _try_to_compute($memd, \%args);
       }
       else {
         my $placeholder = [BEING_PROCESSED, 0];
@@ -128,7 +128,7 @@ sub cache_get_or_compute {
   } # end if got data back from memcached
   else {
     # No data in memcached, so try to compute it ourselves.
-    _try_to_compute($memd, \%args);
+    return _try_to_compute($memd, \%args);
   }
 }
 
