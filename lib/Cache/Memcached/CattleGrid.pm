@@ -14,16 +14,14 @@ use Time::HiRes ();
 
 use constant THUNDER_TIMEOUT => 2;
 
-use constant {
-  # Structure of a value: [being-reprocessed-flag, real timeout timestamp, value]
-  PROC_FLAG_IDX => 0,
-  TIMEOUT_IDX   => 1,
-  VALUE_IDX     => 2,
+# Structure of a value: [being-reprocessed-flag, real timeout timestamp, value]
+use constant PROC_FLAG_IDX => 0;
+use constant TIMEOUT_IDX   => 1;
+use constant VALUE_IDX     => 2;
 
   # Flag names for being-processed-flag
-  NOT_BEING_PROCESSED => 0,
-  BEING_PROCESSED     => 1,
-};
+use constant NOT_BEING_PROCESSED => 0;
+use constant BEING_PROCESSED     => 1;
 
 
 sub cache_get_or_compute {
