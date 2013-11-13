@@ -115,21 +115,27 @@ sub cache_get_or_compute {
       else {
         my $placeholder = [BEING_PROCESSED, 0];
         $cas_val->[1] = $placeholder;
-        if (not $memd->cas($args{key}, @$cas_val, POSIX::ceil($args{compute_time}))) {
-          # Somebody else is now working on it.
-          return $args{wait}->($memd, \%args);
-        }
-        else {
+        if ($memd->cas($args{key}, @$cas_val, POSIX::ceil($args{compute_time}))) {
           # We inserted our placeholder. That means WE need to do the work.
           return _compute_and_set($memd, \%args);
         }
+        else {
+          # Somebody else is now working on it.
+          return $args{wait}->($memd, \%args);
+        }
+
+        die "Assert: Shouldn't be reached!";
       }
+      die "Assert: Shouldn't be reached!";
     }
+    die "Assert: Shouldn't be reached!";
   } # end if got data back from memcached
   else {
     # No data in memcached, so try to compute it ourselves.
     return _try_to_compute($memd, \%args);
   }
+
+  die "Assert: Shouldn't be reached!";
 }
 
 sub _compute_and_set {
