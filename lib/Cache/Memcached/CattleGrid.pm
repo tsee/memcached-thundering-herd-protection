@@ -115,6 +115,13 @@ sub cache_get_or_compute {
   die "Assert: Shouldn't be reached!";
 }
 
+# Without further ado and checks and stuff, go ahead
+# and compute the value from scratch and unconditionally
+# write it to memcached.
+# One could consider whether it makes sense to do another
+# "do we need to update things" check after the computation,
+# but this is only going to extend the validity of the data,
+# and that's actually the correct thing to do.
 sub _compute_and_set {
   my ($memd, $args) = @_;
 
@@ -130,6 +137,9 @@ sub _compute_and_set {
   return $real_value;
 }
 
+# Attempt to add a placeholder that says we're in charge of
+# the computation. If that succeeds, compute. If that fails,
+# enter fallback logic.
 sub _try_to_compute {
   my ($memd, $args) = @_;
 
