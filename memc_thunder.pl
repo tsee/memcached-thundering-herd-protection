@@ -43,9 +43,9 @@ for (1..30) {
 
 my $value = cache_get_or_compute(
   $memd,
-  key => $k,
-  timeout => 6,
-  compute_cb => sub {warn "Processing!\n";sleep 2.5; return "x" x 5},
+  key          => $k,
+  timeout      => 6,
+  compute_cb   => sub {warn "Processing!\n";sleep 2.5; return "x" x 5},
   compute_time => 2.8,
 );
 use Data::Dumper; warn Dumper $value;
@@ -125,8 +125,9 @@ sub cache_get_or_compute {
         }
       }
     }
-  }
+  } # end if got data back from memcached
   else {
+    # No data in memcached, so try to compute it ourselves.
     _try_to_compute($memd, \%args);
   }
 }
