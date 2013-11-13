@@ -25,7 +25,7 @@ use constant THUNDER_TIMEOUT => 2;
 
 # Structure: [being-reprocessed-flag, real timeout timestamp, value]
 use constant {
-  PROC_HASH_IDX => 0,
+  PROC_FLAG_IDX => 0,
   TIMEOUT_IDX   => 1,
   VALUE_IDX     => 2,
 
@@ -97,7 +97,7 @@ sub cache_get_or_compute {
 
     # Here, we know for sure that the data's timed out!
 
-    if ($val_array->[PROC_HASH_IDX]) {
+    if ($val_array->[PROC_FLAG_IDX]) {
       # Data timed out. Somebody working on it already!
       return $args{wait}->($memd, \%args);
     }
