@@ -118,9 +118,9 @@ sub cache_get_or_compute {
 sub _compute_and_set {
   my ($memd, $args) = @_;
 
-  my $timeout_at = time() + $args->{timeout};
-
   my $real_value = $args->{compute_cb}->();
+
+  my $timeout_at = time() + $args->{timeout};
   $memd->set(
     $args->{key},
     [NOT_BEING_PROCESSED, $timeout_at, $real_value],
