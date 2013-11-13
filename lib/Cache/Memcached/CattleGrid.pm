@@ -27,8 +27,7 @@ use constant BEING_PROCESSED     => 1;
 sub cache_get_or_compute {
   my ($memd, %args) = @_;
 
-  # named parameters: key, timeout, compute_cb, compute_time, wait_cb
-  $args{compute_time} ||= THUNDER_TIMEOUT;
+  # named parameters: key, timeout, compute_cb, compute_time, wait
 
   # FIXME the local thing and recursion is a nasty hack.
   if (!ref($args{wait})) {
@@ -40,6 +39,10 @@ sub cache_get_or_compute {
       cache_get_or_compute($memd, %$args, "wait" => sub {return()});
     };
   }
+
+  # Needs to be after the {wait} defaults handling since
+  # it refers to {compute_time} and wants the original value.
+  $args{compute_time} ||= THUNDER_TIMEOUT;
 
   # memcached says: timeouts >= 30days are timestamps. Yuck.
   # Transform to relative value for sanity for now.
