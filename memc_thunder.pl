@@ -23,11 +23,14 @@ my $memd = Cache::Memcached::Fast->new({
 
 use constant THUNDER_TIMEOUT => 2;
 
-# Structure: [being-reprocessed-by-hash, real timeout timestamp, value]
+# Structure: [being-reprocessed-flag, real timeout timestamp, value]
 use constant {
   PROC_HASH_IDX => 0,
   TIMEOUT_IDX   => 1,
   VALUE_IDX     => 2,
+
+  NOT_BEING_PROCESSED => 0,
+  BEING_PROCESSED     => 1,
 };
 
 # TODO Ponder whether compute-time is the conceptual same as the overhang time of the cached value
@@ -68,16 +71,6 @@ sub cache_get_or_compute {
     };
   }
 
-  # Make sure we have a unique id for our process for the "being processed" logic.
-  # FIXME: May be able to drop this if it's not strictly necessary!
-  state $process_id;
-  state $process_hash;
-  if (not defined $process_id or $process_id != $$) { # fork protection
-    $process_id = $$;
-    $process_hash = Digest::MD5::md5($$ . Time::HiRes::time() . rand()); # FIXME add something host specific?
-  }
-  $args{process_hash} = $process_hash;
-
   # memcached says: timeouts >= 30days are timestamps. Yuck.
   # Transform to relative value for sanity for now.
   my $timeout = $args{timeout};
@@ -104,7 +97,7 @@ sub cache_get_or_compute {
 
     # Here, we know for sure that the data's timed out!
 
-    if (defined $val_array->[PROC_HASH_IDX]) {
+    if ($val_array->[PROC_HASH_IDX]) {
       # Data timed out. Somebody working on it already!
       return $args{wait}->($memd, \%args);
     }
@@ -120,7 +113,7 @@ sub cache_get_or_compute {
         _try_to_compute($memd, \%args);
       }
       else {
-        my $placeholder = [$process_hash, 0];
+        my $placeholder = [BEING_PROCESSED, 0];
         $cas_val->[1] = $placeholder;
         if (not $memd->cas($args{key}, @$cas_val, POSIX::ceil($args{compute_time}))) {
           # Somebody else is now working on it.
@@ -144,7 +137,11 @@ sub _compute_and_set {
   my $timeout_at = time() + $args->{timeout};
 
   my $real_value = $args->{compute_cb}->();
-  $memd->set($args->{key}, [undef, $timeout_at, $real_value], $timeout_at + POSIX::ceil($args->{compute_time}));
+  $memd->set(
+    $args->{key},
+    [NOT_BEING_PROCESSED, $timeout_at, $real_value],
+    $timeout_at + POSIX::ceil($args->{compute_time})
+  );
 
   return $real_value;
 }
@@ -152,7 +149,7 @@ sub _compute_and_set {
 sub _try_to_compute {
   my ($memd, $args) = @_;
 
-  my $placeholder = [$args->{process_hash}, 0];
+  my $placeholder = [BEING_PROCESSED, 0];
   # Immediately set that we're the first to generate it
   if (not $memd->add($args->{key}, $placeholder, POSIX::ceil($args->{compute_time}))) {
     # Somebody else is now working on it.
