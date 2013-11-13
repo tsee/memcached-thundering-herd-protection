@@ -35,7 +35,7 @@ sub cache_get_or_compute {
     my $wait_time = $args{wait} || $args{compute_time} || 0.1; # 100ms default
     $args{wait} = sub {
       my ($memd, $args) = @_;
-      sleep($wait_time);
+      Time::HiRes::sleep($wait_time);
       # retry once only
       cache_get_or_compute($memd, %$args, "wait" => sub {return()});
     };
