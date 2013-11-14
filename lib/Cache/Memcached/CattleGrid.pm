@@ -6,7 +6,7 @@ use warnings;
 our $VERSION = '0.01';
 
 use Exporter 'import';
-our @EXPORT_OK = qw(cache_get_or_compute);
+our @EXPORT_OK = qw(cache_get_or_compute multi_cache_get_or_compute);
 our %EXPORT_TAGS = ('all' => \@EXPORT_OK);
 
 use POSIX ();
@@ -156,6 +156,247 @@ sub _try_to_compute {
   die "Assert: Shouldn't be reached!";
 }
 
+
+
+
+
+
+# Indices for the keys sub-arrays
+use constant KEYS_KEY_IDX => 0;
+use constant KEYS_EXPIRE_IDX => 1;
+use Clone ();
+
+#cache_fetch(
+#  $memd,
+#  'keys' => [
+#    ['key1', $expire1],
+#    ['key2', $expire2],...
+#  ],
+#  compute_time => 2,
+#  compute_cb => sub {my ($memd, $args, $keys) = @_; },
+#  'wait'     => sub {my ($memd, $args, $keys) = @_; },
+#);
+
+sub multi_cache_get_or_compute {
+  my ($memd, %args) = @_;
+
+  # named parameters: keys => [[key, expiration],[key,expiration]...], compute_cb, compute_time, wait
+
+  if (not ref($args{keys}) eq 'ARRAY') {
+    Carp::croak("Need 'keys' parameter to be of the form [ [key, expiration], [key, expiration], ... ]");
+  }
+
+  # FIXME the local thing and recursion is a nasty hack.
+  if (!ref($args{wait})) {
+    my $wait_time = $args{wait} || $args{compute_time} || 0.1; # 100ms default
+    $args{wait} = sub {
+      my ($memd, $args) = @_;
+      Time::HiRes::sleep($wait_time);
+      # retry once only
+      return multi_cache_get_or_compute($memd, %$args, "wait" => sub {return()});
+    };
+  }
+
+  # Needs to be after the {wait} defaults handling since
+  # it refers to {compute_time} and wants the original value.
+  $args{compute_time} ||= THUNDER_TIMEOUT;
+
+  $args{keys} = Clone::clone($args{keys}); # avoid action at a distance
+  # memcached says: timeouts >= 30days are timestamps. Yuck.
+  # Transform to relative value for sanity for now.
+  my %all_key_expirations;
+  foreach my $k_ary (@{$args{keys}}) {
+    my $expiration = $k_ary->[KEYS_EXPIRE_IDX];
+    $k_ary->[KEYS_EXPIRE_IDX] = $expiration = $expiration - time()
+      if $expiration > 30*24*60*60;
+
+    $all_key_expirations{$k_ary->[KEYS_KEY_IDX]} = $k_ary->[KEYS_EXPIRE_IDX];
+  }
+
+  my %output_hash;
+
+  my @consider_keys = keys %all_key_expirations;
+  my $value_hash = $memd->get_multi(@consider_keys);
+  my @all_found_keys = keys %$value_hash;
+
+  my @keys_to_attempt; # keys to *attempt* to get a lock for
+  my @keys_to_wait_for; # keys to simply wait for (or user-specific logic)
+  my @keys_to_cas_update; # keys to do a cas dance on
+  my @keys_to_compute; # keys to simply compute (where we already have a lock)
+  KEY_LOOP: while (@consider_keys) {
+    my $key = shift @consider_keys;
+    my $val_array = $value_hash->{$key};
+
+    # Simply not found - attempt to compute
+    if (not $val_array) {
+      push @keys_to_attempt, $key;
+      next KEY_LOOP;
+    }
+
+    if ($val_array->[TIMEOUT_IDX] > time()) {
+      # Data not timed out yet.
+
+      if (@$val_array >= 3) {
+        # All is well, cache hit.
+        $output_hash{$key} = $val_array->[VALUE_IDX];
+        delete $value_hash->{$key}; # just sanitation
+        next KEY_LOOP;
+      }
+      else {
+        # Not timed out, no data available, but there's an entry.
+        # Must be being processed for the first time.
+        push @keys_to_wait_for, $key;
+        next KEY_LOOP;
+      }
+
+      die "Assert: Shouldn't be reached!";
+    }
+
+    # Here, we know for sure that the data for this key has timed out!
+
+    if ($val_array->[PROC_FLAG_IDX]) {
+      # Data timed out. Somebody working on it already!
+      push @keys_to_wait_for, $key;
+      next KEY_LOOP;
+    }
+    else {
+      # Nobody working on it. And data is timed out. Requires re-computation
+      # and re-setting the value to include a flag to indicate
+      # it's being worked on.
+
+      push @keys_to_cas_update, $key;
+      next KEY_LOOP;
+    }
+    die "Assert: Shouldn't be reached!";
+  } # end while having undecided keys
+
+
+  # First, do a CAS get/update on those keys that need it
+  # since it can feed the other key sets.
+
+  # Re-get using gets to get the CAS value.
+  if (@keys_to_cas_update) {
+    my $cas_val_hash = $memd->gets_multi(@keys_to_cas_update);
+    foreach my $key (keys %$cas_val_hash) {
+      my $cas_val = $cas_val_hash->{$key};
+
+      if (not defined $cas_val) {
+        # Must have been deleted/evicted in the meantime.
+        # *Attempt* to become the one to fill the cache.
+        push @keys_to_attempt, $key;
+      }
+      elsif (@{ $cas_val->[1] } >= 3
+             and $cas_val->[1][TIMEOUT_IDX] > time())
+      {
+        # Somebody managed to set a valid value in the meantime
+        # => All is well, cache hit.
+        $output_hash{$key} = $cas_val->[VALUE_IDX];
+        delete $cas_val_hash->{$key};
+      }
+      elsif ($cas_val->[1][PROC_FLAG_IDX]) {
+        # Somebody else is now working on it.
+        push @keys_to_wait_for, $key;
+        delete $cas_val_hash->{$key};
+      }
+      else {
+        # It's us. Compute & set.
+        push @keys_to_compute, $key;
+      }
+    }
+
+    # All keys in $cas_val_hash can now be marked as "being processed"
+    if (keys %$cas_val_hash) {
+      my $exp_time = POSIX::ceil($args{compute_time});
+      my @cas_args = map
+                       # key, CAS, value, expiration
+                       [ $_,
+                         $cas_val_hash->{$_}[0],
+                         [BEING_PROCESSED, 0],
+                         $exp_time
+                       ],
+                       keys %$cas_val_hash;
+      my @statuses = $memd->cas_multi(@cas_args);
+      foreach my $i (0..$#statuses) {
+        my $key = $cas_args[$i][0];
+        if ($statuses[$i]) {
+          # We inserted our placeholder. That means WE need to do the work.
+          push @keys_to_compute, $key;
+        }
+        else {
+          # Somebody else is now working on it.
+          push @keys_to_wait_for, $key;
+        }
+      }
+    } # end "if have keys that need locking with CAS"
+
+    @keys_to_cas_update = (); # cleanup
+  } # end "if have keys to give the cas treatment"
+
+
+
+  # Then attempt to get a placeholder for the keys that need computing
+  if (@keys_to_attempt) {
+    my $exp_time = POSIX::ceil($args{compute_time});
+    my @add_args = map
+                     # key, value, expiration
+                     [ $_,
+                       [BEING_PROCESSED, 0],
+                       $exp_time
+                     ],
+                     @keys_to_attempt;
+
+    my @statuses = $memd->add(@add_args);
+    foreach my $i (0..$#statuses) {
+      my $key = $add_args[$i][0];
+      if ($statuses[$i]) {
+        # We inserted our placeholder. That means WE need to do the work.
+        push @keys_to_compute, $key;
+      }
+      else {
+        # Somebody else is now working on it.
+        push @keys_to_wait_for, $key;
+      }
+    }
+
+    @keys_to_attempt = (); # cleanup
+  } # end "if have keys to get a lock for"
+  
+
+  # Then do the actual computations where necessary
+  if (@keys_to_compute) {
+    my @values = $args{compute_cb}->($memd, \%args, \@keys_to_compute);
+
+    my @set_args;
+    my $now = time();
+    my $compute_time = POSIX::ceil($args{compute_time});
+    foreach my $i (0..$#keys_to_compute) {
+      my $key = $keys_to_compute[$i];
+      my $expire_at = $all_key_expirations{$key};
+      push @set_args, [
+        $key,
+        [NOT_BEING_PROCESSED, $expire_at, $values[$i]],
+        $expire_at + $compute_time
+      ];
+
+      $output_hash{$key} = $values[$i];
+    }
+
+    $memd->set_multi(@set_args);
+
+    @keys_to_compute = (); # cleanup
+  }
+
+  # Then perform the waiting actions as necessary
+  # TODO: It may make sense to do things like somehow include the time it already took to do the previous processing in order not to pessimize more than necessary.
+  if (@keys_to_wait_for) {
+    my $h = $args{wait}->($memd, \%args, \@keys_to_wait_for);
+    $output_hash{$_} = $h->{$_} for keys %$h; # merge output
+
+    @keys_to_wait_for = (); # cleanup
+  }
+
+  return \%output_hash;
+}
 
 1;
 __END__
