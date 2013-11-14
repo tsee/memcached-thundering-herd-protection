@@ -273,12 +273,23 @@ prior art.
 
 Steffen Mueller, E<lt>smueller@cpan.orgE<gt>
 
+=head1 ACKNOWLEDGMENT
+
+This module was originally developed for Booking.com.
+With approval from Booking.com, this module was generalized
+and put on CPAN, for which the authors would like to express
+their gratitude.
+
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2013 by Steffen Mueller
+ (C) 2013 Steffen Mueller. All rights reserved.
+ 
+ This code is available under the same license as Perl version
+ 5.8.1 or higher.
+ 
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.1 or,
-at your option, any later version of Perl 5 you may have available.
 
 =cut
