@@ -14,7 +14,7 @@ use Time::HiRes ();
 
 use constant THUNDER_TIMEOUT => 2;
 
-# Structure of a value: [being-reprocessed-flag, real timeout timestamp, value]
+# Structure of a value: [being-reprocessed-flag, real expiration timestamp, value]
 use constant PROC_FLAG_IDX => 0;
 use constant TIMEOUT_IDX   => 1;
 use constant VALUE_IDX     => 2;
@@ -27,7 +27,7 @@ use constant BEING_PROCESSED     => 1;
 sub cache_get_or_compute {
   my ($memd, %args) = @_;
 
-  # named parameters: key, timeout, compute_cb, compute_time, wait
+  # named parameters: key, expiration, compute_cb, compute_time, wait
 
   # FIXME the local thing and recursion is a nasty hack.
   if (!ref($args{wait})) {
@@ -46,9 +46,9 @@ sub cache_get_or_compute {
 
   # memcached says: timeouts >= 30days are timestamps. Yuck.
   # Transform to relative value for sanity for now.
-  my $timeout = $args{timeout};
-  $args{timeout} = $timeout = $timeout - time()
-    if $timeout > 30*24*60*60;
+  my $expiration = $args{expiration};
+  $args{expiration} = $expiration = $expiration - time()
+    if $expiration > 30*24*60*60;
 
   my $val_array = $memd->get($args{key});
   if ($val_array) {
@@ -127,11 +127,11 @@ sub _compute_and_set {
 
   my $real_value = $args->{compute_cb}->();
 
-  my $timeout_at = time() + $args->{timeout};
+  my $expiration_at = time() + $args->{expiration};
   $memd->set(
     $args->{key},
-    [NOT_BEING_PROCESSED, $timeout_at, $real_value],
-    $timeout_at + POSIX::ceil($args->{compute_time})
+    [NOT_BEING_PROCESSED, $expiration_at, $real_value],
+    $expiration_at + POSIX::ceil($args->{compute_time})
   );
 
   return $real_value;
@@ -174,7 +174,7 @@ Cache::Memcached::CattleGrid - Thundering Herd Protection for Memcached clients
   my $value = cache_get_or_compute(
     $client,
     key         => "foo", # key to fetch
-    timeout     => 60, # [s] timeout to set if need to compute the value
+    expiration  => 60,    # [s] expiration to set if need to compute the value
     compute_cb  => sub { ... expensive computation... return $result },
   );
 
