@@ -241,7 +241,44 @@ interface to intercept such cases and handle them with custom logic.
 
 =head2 The Algorithm
 
+Situation 1 from above is handled by always storing a tuple in the cache
+that includes the real, user-supplied expiration time of the cached value.
+The expiration time that is set on the cache entry is the sum of the
+user-supplied expiration time and an upper-bound estimate of the
+time it takes to recalculate the cached value.
 
+On retrieval of the cache entry (tuple), the client checks whether
+the real, user-supplied expiration time has passed and if so, it will
+recalculate the value. Before doing so, it attempts to obtain a lock
+on the cache entry to prevent others from concurrently also
+recalculating the same cache entry.
+
+The locking is implemented by setting a flag on the tuple structure
+in the cache that indicates that the value is already being reprocessed.
+This can be done race-condition free by using the C<add>, C<gets>, and
+C<cas> commands supplied by Memcached. With the command that sets
+the being-reprocessed flag on a tuple, the client always sets an
+expiration time of the upper-bound of the expected calculation time,
+thus protecting against indefinitely invalidating the cache
+when a re-calculation fails, slows, or locks up.
+
+On retrieval of a cache entry that is being reprocessed, other clients
+than the one doing the reprocessing will continue to return the
+old cached value. The time this stale value is in use is bounded by
+the reprocessing time set as expiration above.
+
+There are a number of conditions under which there is no such stale
+value to use, however, including the first-use of the cache entry
+and a cache entry that is used rarely enough to expire altogether before
+a client finds it to be outdated. The pathological variant is one
+in which a large number of clients concurrently request a cache value
+that is not available at all (stale or not). In this situation,
+the remedy is application dependent. By default, all clients but one
+wait for up to the upper-bound on the time it takes to calculate
+the cached value. This may result in a slow-down, but no Thundering
+Herd effect on back-end systems. If a complete failure to provide the
+cached value is preferrable to a slow-down, then that can be achieved
+by providing a corresponding custom callback, see below.
 
 =head2 Footnotes
 
