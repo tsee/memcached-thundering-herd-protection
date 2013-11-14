@@ -257,7 +257,6 @@ sub multi_cache_get_or_compute {
     if ($val_array->[PROC_FLAG_IDX]) {
       # Data timed out. Somebody working on it already!
       push @keys_to_wait_for, $key;
-      next KEY_LOOP;
     }
     else {
       # Nobody working on it. And data is timed out. Requires re-computation
@@ -265,9 +264,7 @@ sub multi_cache_get_or_compute {
       # it's being worked on.
 
       push @keys_to_cas_update, $key;
-      next KEY_LOOP;
     }
-    die "Assert: Shouldn't be reached!";
   } # end while having undecided keys
 
 
