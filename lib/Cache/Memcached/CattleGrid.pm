@@ -167,13 +167,103 @@ Cache::Memcached::CattleGrid - Thundering Herd Protection for Memcached clients
 
 =head1 SYNOPSIS
 
-  use Cache::Memcached::CattleGrid;
+  use Cache::Memcached::CattleGrid qw(:all);
+  
+  my $client = Cache::Memcached::Fast->new(...);
+  
+  my $value = cache_get_or_compute(
+    $client,
+    key         => "foo", # key to fetch
+    timeout     => 60, # [s] timeout to set if need to compute the value
+    compute_cb  => sub { ... expensive computation... return $result },
+  );
 
 =head1 DESCRIPTION
 
+This is a prototype of a Thundering-Herd prevention algorithm for
+memcached. As most such systems, it doesn't play entirely nicely
+with incompatible modes of access to the same keys, but that's
+not so much surprise, one would hope. Access to different keys
+in the same memcached instance through different means is perfectly
+safe and compatible.
 
-=head2 EXPORT
+=head2 The Problem Statement
 
+The algorithm described and implemented here
+attempts to provide means of dealing
+with two kinds of situations. Most similar systems appear to be
+targeted at the first and more common situation only:
+
+=over 2
+
+=item 1
+
+A hot cached value expires. Between the point in time when it
+expired and the time when the first user has recomputed the
+value and successfully filled the cache, all users of the cache
+will, in a naive cache client implementation, attempt to
+recalculate the value to store in the cache. This can bring down
+back-end systems that are not designed to handle the load of
+all front-ends that rely on the cacheL<[1]|/"Footnotes">.
+
+=item 2
+
+A normal web environment has rather friendly, randomized access
+patterns. But if your cache has a number of near-synchronized
+clients that all attempt to access a new cache key in unison
+(such as when a second or a minute roll around), then some of the
+mechanisms that can help in situation 1 break down.
+
+=back
+
+=head2 The Solution
+
+A very effective approach to deal with most causes of situation 1)
+is described in L<[2]|/"Footnotes">. In a nutshell, it's a trade-off in that we
+accept that for a small amount time, we will serve data from a stale
+cache. This small amount of time is the minimum of either: the time it
+takes for a single process to regenerate a fresh cache value or
+a configured safety threshold. This has the effect that when a cache entry
+has expired, the first to request the cache entry will start reprocessing
+and all subsequent accesses (until the reprocessing is done) will use
+the old, slightly outdated cached data. This is a perfectly valid
+strategy in many use cases and where extreme accuracy of the cached
+values is required, it's usually possible to address that either by
+active invalidation (deleting from memcached) or by simply setting a
+more stringent expire time.
+
+That approach does not handle situation 2), in which many clients
+attempt to access a cache entry that didn't previously exist. To my knowledge,
+there is no generic solution for handling that situation. It will always
+require application specific knowledge to handle. For this
+situation, there is a configurable back-off time, or a custom hook
+interface to intercept such cases and handle them with custom logic.
+
+=head2 The Algorithm
+
+
+
+=head2 Footnotes
+
+=over 2
+
+=item [1]
+
+I am of the firm (and learned) opinion that when you're in such
+a situation, your cache is no longer strictly a cache and memcached
+is no longer the appropriate technology to use.
+
+=item [2]
+
+See L<https://github.com/ericflo/django-newcache>
+and L<https://bitbucket.org/zzzeek/dogpile.cache/> for examples of
+prior art.
+
+=back
+
+=head1 API DOCUMENTATION
+
+=head2 Exported Functions
 
 
 =head1 SEE ALSO
