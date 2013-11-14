@@ -35,7 +35,7 @@ sub cache_get_or_compute {
       my ($memd, $args) = @_;
       Time::HiRes::sleep($wait_time);
       # retry once only
-      cache_get_or_compute($memd, %$args, "wait" => sub {return()});
+      return cache_get_or_compute($memd, %$args, "wait" => sub {return()});
     };
   }
 
