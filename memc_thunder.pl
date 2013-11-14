@@ -22,14 +22,25 @@ my $memd = Cache::Memcached::Fast->new({
 
 # TODO Ponder whether compute-time is the conceptual same as the overhang time of the cached value
 
-my $k = "cachekey";
+my @k = map {["k$_", 4]} 1..10;
 
-for (1..30) {
+for (1..0) {
   fork() or last;
 }
 
-use Cache::Memcached::CattleGrid qw(cache_get_or_compute);
- 
+use Cache::Memcached::CattleGrid qw(cache_get_or_compute
+                                    multi_cache_get_or_compute);
+
+my $res = multi_cache_get_or_compute(
+  $memd,
+  keys => \@k,
+  compute_cb => sub {my ($memd, $args, $keys) = @_; warn "Processing @$keys"; sleep(0.3 * @$keys); return map "V$_", @$keys;},
+  compute_time => 1,
+);
+use Data::Dumper; warn Dumper $res;
+
+__END__
+
 my $value = cache_get_or_compute(
   $memd,
   key          => $k,
