@@ -29,7 +29,7 @@ sub cache_get_or_compute {
 
   # named parameters: key, expiration, compute_cb, compute_time, wait
 
-  # FIXME the local thing and recursion is a nasty hack.
+  # FIXME the local thing and recursion is a nasty hack...
   if (!ref($args{wait})) {
     my $wait_time = $args{wait} || $args{compute_time} || 0.1; # 100ms default
     $args{wait} = sub {
@@ -187,6 +187,12 @@ not so much surprise, one would hope. Access to different keys
 in the same memcached instance through different means is perfectly
 safe and compatible.
 
+The logic in this module should be compatible with any Memcached
+client library that has the same API as the L<Cache::Memcached::Fast>
+module at least for the following methods: C<get>, C<set>, C<add>,
+C<gets>, C<cas>. It has only been tested with the aforementioned
+client library.
+
 =head2 The Problem Statement
 
 The algorithm described and implemented here
@@ -327,6 +333,5 @@ their gratitude.
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-
 
 =cut
