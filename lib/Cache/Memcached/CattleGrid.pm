@@ -19,10 +19,9 @@ use constant PROC_FLAG_IDX => 0;
 use constant TIMEOUT_IDX   => 1;
 use constant VALUE_IDX     => 2;
 
-  # Flag names for being-processed-flag
+# Flag names for being-processed-flag
 use constant NOT_BEING_PROCESSED => 0;
 use constant BEING_PROCESSED     => 1;
-
 
 sub cache_get_or_compute {
   my ($memd, %args) = @_;
@@ -76,7 +75,7 @@ sub cache_get_or_compute {
     }
     else {
       # Nobody working on it. And data is timed out. Requires re-computation and
-      # re-setting the value to include our process hash to indicate it's being worked on.
+      # re-setting the value to include a flag to indicate it's being worked on.
 
       # Re-get using gets to get the CAS value.
       my $cas_val = $memd->gets($args{key});
@@ -306,11 +305,25 @@ prior art.
 
 =head1 API DOCUMENTATION
 
-=head2 Exported Functions
+=head2 Exports
 
+Optionally exports the C<cache_get_or_compute> function which
+is the main API of the module. Also recognizes the standard
+C<Exporter> semantics, including the C<:all> tag.
+
+=head2 C<cache_get_or_compute>
+
+FIXME document
 
 =head1 SEE ALSO
 
+L<http://en.wikipedia.org/wiki/Thundering_herd_problem>
+
+L<Cache::Memcached::Fast>
+
+L<https://github.com/ericflo/django-newcache>
+and L<https://bitbucket.org/zzzeek/dogpile.cache/> for examples of
+prior art.
 
 =head1 AUTHOR
 
