@@ -295,10 +295,6 @@ sub multi_cache_get_or_compute {
         push @keys_to_wait_for, $key;
         delete $cas_val_hash->{$key};
       }
-      else {
-        # It's us. Compute & set.
-        push @keys_to_compute, $key;
-      }
     }
 
     # All keys in $cas_val_hash can now be marked as "being processed"
@@ -342,7 +338,7 @@ sub multi_cache_get_or_compute {
                      ],
                      @keys_to_attempt;
 
-    my @statuses = $memd->add(@add_args);
+    my @statuses = $memd->add_multi(@add_args);
     foreach my $i (0..$#statuses) {
       my $key = $add_args[$i][0];
       if ($statuses[$i]) {
