@@ -1,7 +1,5 @@
 Not in order of priority!
-
-- Document properly
-- Make it a module
+- Document properly (WIP)
 - Optimize
 - Consider API carefully
 - Implement multi_ variant if at all possible (ick!)
