@@ -428,13 +428,15 @@ Cache::Memcached::CattleGrid - Thundering Herd Protection for Memcached Clients
 
   use Cache::Memcached::CattleGrid qw(:all);
   
-  my $client = Cache::Memcached::Fast->new(...);
+  my $memd_client = Cache::Memcached::Fast->new(...);
   
   my $value = cache_get_or_compute(
-    $client,
-    key         => "foo", # key to fetch
-    expiration  => 60,    # [s] expiration to set if need to compute the value
-    compute_cb  => sub { ... expensive computation... return $result },
+    $memd_client,
+    key          => "foo", # key to fetch
+    expiration   => 60,    # [s] expiration to set if need to compute the value
+    compute_cb   => sub { ... expensive computation... return $result },
+    compute_time => 1,
+    wait         => 0.1,
   );
 
 =head1 DESCRIPTION
@@ -485,11 +487,11 @@ mechanisms that can help in situation 1 break down.
 
 A very effective approach to deal with most causes of situation 1)
 is described in L<[2]|/"Footnotes">. In a nutshell, it's a trade-off in that we
-accept that for a small amount time, we will serve data from a stale
+accept that for a small amount of time, we will serve data from a stale
 cache. This small amount of time is the minimum of either: the time it
-takes for a single process to regenerate a fresh cache value or
+takes for a single process to regenerate a fresh cache value, or
 a configured safety threshold. This has the effect that when a cache entry
-has expired, the first to request the cache entry will start reprocessing
+has expired, the first to request the cache entry will start reprocessing,
 and all subsequent accesses (until the reprocessing is done) will use
 the old, slightly outdated cached data. This is a perfectly valid
 strategy in many use cases and where extreme accuracy of the cached
@@ -585,8 +587,8 @@ The C<key> parameter is required and indicates the Memcached key to retrieve and
 store. The C<compute_cb> parameter needs to be a function reference that will,
 on cache miss, compute the value to store in the cache and return it. It is
 invoked as C<$callback-E<gt>($memd_client, $parameter_hashref)> where
-C<$parameter_hashref> is a hash reference of all parameters provided to the
-C<cache_get_or_compute> call.
+C<$parameter_hashref> is a hash reference of all other parameters provided
+to the C<cache_get_or_compute> call.
 
 The C<compute_time> parameter (in integer seconds)
 indicates a high estimate of the time it might take to compute the value
@@ -594,19 +596,19 @@ on cache miss. You can generally be a tad generous on this. It defaults
 to 2 seconds.
 
 The C<expiration> parameter indicates the desired expiration time for
-the computed value. It defaults to C<0>, which is infinite retention. That is not usually
+the computed value. It defaults to C<0>, which is unbounded retention. That is not usually
 a good idea, so make sure to provide a better value. The unit is seconds
 from "now" or, if more than 30 days, it's considered a Unix epoch (Memcached
 rules, not ours).
 
 Finally, the C<wait> parameter can either be a function reference, a number
 (may be fractional, in unit of seconds), or it may be omitted altogether.
-If omitted, wait will be set to the C<compute_time> parameter if one was
+If omitted, C<wait> will be set to the C<compute_time> parameter if one was
 explicitly provided. Otherwise, it defaults to C<0.1> seconds to avoid
 blocking clients too long.
 
-If C<wait> is a number (or it was set to a number as per the aforementined
-defaults), then if the running process has a cache miss, but there is
+If C<wait> is a number (or it was set to a number as per the aforementioned
+defaults), and if the running process has a cache miss, but there is
 another process already updating the cached value, then we will
 wait for C<wait> number of seconds and retry to fetch (once).
 
@@ -618,10 +620,10 @@ so if you want logic similar to the I<wait, then retry> logic that is
 the default, then you could use a callback like the following:
 
   wait => sub {
-    my ($memd, $args) = @_;
+    my ($memd_client, $args) = @_;
     # ... custom logic here ...
     # Retry. But don't go into infinite loop, thus the empty callback:
-    return cache_get_or_compute($memd, %$args, "wait" => sub {return()});
+    return cache_get_or_compute($memd_client, %$args, "wait" => sub {return()});
   }
 
 =head2 C<multi_cache_get_or_compute>
