@@ -24,17 +24,19 @@ my $memd = Cache::Memcached::Fast->new({
 # Something small but not tiny
 my $value = [[1..5],[1..5],[1..5],[1..5],[1..5],[1..5],[1..5],];
 
-my $key = "fooo";
-$memd->set($key, [0, time()+1e9, $value], 0); # do not expire
+my $key_direct = "foo";
+my $key_turnstile = "bar";
+$memd->set($key_direct, $value, 0); # do not expire
+$memd->set($key_turnstile, [0, time()+1e9, $value], 0); # do not expire
 
 cmpthese(4000.91, {
   direct => sub {
-    $memd->get($key);
+    $memd->get($key_direct);
   },
   turnstile => sub {
     cache_get_or_compute(
       $memd,
-      key          => $key,
+      key          => $key_turnstile,
       expiration   => 0,
       compute_cb   => sub { $value },
     );
