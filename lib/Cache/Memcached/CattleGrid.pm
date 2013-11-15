@@ -11,6 +11,8 @@ our %EXPORT_TAGS = ('all' => \@EXPORT_OK);
 
 use POSIX ();
 use Time::HiRes ();
+use Data::Dumper qw(Dumper);
+use Constant::FromGlobal qw(DEBUG_DUMPS);
 
 use constant THUNDER_TIMEOUT => 2;
 
@@ -235,7 +237,6 @@ sub multi_cache_get_or_compute {
 
     if ($val_array->[TIMEOUT_IDX] > time()) {
       # Data not timed out yet.
-
       if (@$val_array >= 3) {
         # All is well, cache hit.
         $output_hash{$key} = $val_array->[VALUE_IDX];
@@ -266,7 +267,14 @@ sub multi_cache_get_or_compute {
       push @keys_to_cas_update, $key;
     }
   } # end while having undecided keys
-
+  if (DEBUG_DUMPS) {
+    warn "Key distribution after first run through:\n";
+    warn "Cache hit:  " . Dumper(\%output_hash);
+    warn "Attempt:    " . Dumper(\@keys_to_attempt);
+    warn "Compute:    " . Dumper(\@keys_to_compute);
+    warn "CAS update: " . Dumper(\@keys_to_cas_update);
+    warn "Wait:       " . Dumper(\@keys_to_wait_for);
+  }
 
   # First, do a CAS get/update on those keys that need it
   # since it can feed the other key sets.
@@ -324,8 +332,13 @@ sub multi_cache_get_or_compute {
 
     @keys_to_cas_update = (); # cleanup
   } # end "if have keys to give the cas treatment"
-
-
+  if (DEBUG_DUMPS) {
+    warn "Key distribution after CAS:\n";
+    warn "Output:     " . Dumper(\%output_hash);
+    warn "Attempt:    " . Dumper(\@keys_to_attempt);
+    warn "Compute:    " . Dumper(\@keys_to_compute);
+    warn "Wait:       " . Dumper(\@keys_to_wait_for);
+  }
 
   # Then attempt to get a placeholder for the keys that need computing
   if (@keys_to_attempt) {
@@ -353,6 +366,12 @@ sub multi_cache_get_or_compute {
 
     @keys_to_attempt = (); # cleanup
   } # end "if have keys to get a lock for"
+  if (DEBUG_DUMPS) {
+    warn "Key distribution after lock attempt:\n";
+    warn "Cache hit:  " . Dumper(\%output_hash);
+    warn "Compute:    " . Dumper(\@keys_to_compute);
+    warn "Wait:       " . Dumper(\@keys_to_wait_for);
+  }
   
 
   # Then do the actual computations where necessary
@@ -378,9 +397,16 @@ sub multi_cache_get_or_compute {
 
     @keys_to_compute = (); # cleanup
   }
+  if (DEBUG_DUMPS) {
+    warn "Key distribution after compute:\n";
+    warn "Cache hit:  " . Dumper(\%output_hash);
+    warn "Wait:       " . Dumper(\@keys_to_wait_for);
+  }
 
   # Then perform the waiting actions as necessary
-  # TODO: It may make sense to do things like somehow include the time it already took to do the previous processing in order not to pessimize more than necessary.
+  # TODO: It may make sense to do things like somehow include
+  #       the time it already took to do the previous processing
+  #       in order not to pessimize more than necessary.
   if (@keys_to_wait_for) {
     my $h = $args{wait}->($memd, \%args, \@keys_to_wait_for);
     $output_hash{$_} = $h->{$_} for keys %$h; # merge output

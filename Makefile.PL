@@ -9,6 +9,9 @@ WriteMakefile(
       POSIX => '0',
       'Test::More' => '0.88',
       'Time::HiRes' => '0',
+      'Clone' => '0',
+      'Data::Dumper' => '0',
+      'Constant::FromGlobal' => '0',
       Exporter => '0',
       constant => '0',
     }, # e.g., Module::Name => 1.1
