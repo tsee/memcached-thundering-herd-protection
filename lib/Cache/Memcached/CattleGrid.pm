@@ -422,7 +422,7 @@ __END__
 
 =head1 NAME
 
-Cache::Memcached::CattleGrid - Thundering Herd Protection for Memcached clients
+Cache::Memcached::CattleGrid - Thundering Herd Protection for Memcached Clients
 
 =head1 SYNOPSIS
 
@@ -567,11 +567,64 @@ prior art.
 
 =head2 Exports
 
-Optionally exports the C<cache_get_or_compute> function which
-is the main API of the module. Also recognizes the standard
+Optionally exports the C<cache_get_or_compute> and
+C<multi_cache_get_or_compute> functions which
+are the main API of the module. Also recognizes the standard
 C<Exporter> semantics, including the C<:all> tag.
 
 =head2 C<cache_get_or_compute>
+
+This function is the single-key implementation of the Thundering Herd protection.
+C<cache_get_or_compute> will attempt to fetch or compute the cached value for
+the given key, and will try really hard to avoid more than one user recomputing
+the cached value at any given time.
+
+The first argument to C<cache_get_or_compute> needs to be a Memcached client object,
+typically a C<Cache::Memcached::Fast> object. It's followed by named parameters.
+The C<key> parameter is required and indicates the Memcached key to retrieve and/or
+store. The C<compute_cb> parameter needs to be a function reference that will,
+on cache miss, compute the value to store in the cache and return it. It is
+invoked as C<$callback-E<gt>($memd_client, $parameter_hashref)> where
+C<$parameter_hashref> is a hash reference of all parameters provided to the
+C<cache_get_or_compute> call.
+
+The C<compute_time> parameter (in integer seconds)
+indicates a high estimate of the time it might take to compute the value
+on cache miss. You can generally be a tad generous on this. It defaults
+to 2 seconds.
+
+The C<expiration> parameter indicates the desired expiration time for
+the computed value. It defaults to C<0>, which is infinite retention. That is not usually
+a good idea, so make sure to provide a better value. The unit is seconds
+from "now" or, if more than 30 days, it's considered a Unix epoch (Memcached
+rules, not ours).
+
+Finally, the C<wait> parameter can either be a function reference, a number
+(may be fractional, in unit of seconds), or it may be omitted altogether.
+If omitted, wait will be set to the C<compute_time> parameter if one was
+explicitly provided. Otherwise, it defaults to C<0.1> seconds to avoid
+blocking clients too long.
+
+If C<wait> is a number (or it was set to a number as per the aforementined
+defaults), then if the running process has a cache miss, but there is
+another process already updating the cached value, then we will
+wait for C<wait> number of seconds and retry to fetch (once).
+
+If C<wait> is a function reference, then that function will be called
+under the conditions we'd otherwise wait & retry. The function is
+invoked as C<$wait-E<gt>($memd_client, $parameter_hashref)>. Its
+return value is directly returned from C<cache_get_or_compute>,
+so if you want logic similar to the I<wait, then retry> logic that is
+the default, then you could use a callback like the following:
+
+  wait => sub {
+    my ($memd, $args) = @_;
+    # ... custom logic here ...
+    # Retry. But don't go into infinite loop, thus the empty callback:
+    return cache_get_or_compute($memd, %$args, "wait" => sub {return()});
+  }
+
+=head2 C<multi_cache_get_or_compute>
 
 FIXME document
 
