@@ -2,7 +2,7 @@
 use 5.14.0;
 use warnings;
 
-# See README for explanation.
+#BEGIN{$Cache::Memcached::Turnstile::DEBUG_DUMPS = 1;}
 
 use Cache::Memcached::Fast;
 use Sereal::Encoder;
@@ -31,8 +31,8 @@ for (1..5) {
   fork() or last;
 }
 
-use Cache::Memcached::CattleGrid qw(cache_get_or_compute
-                                    multi_cache_get_or_compute);
+use Cache::Memcached::Turnstile qw(cache_get_or_compute
+                                   multi_cache_get_or_compute);
 
 my $res = multi_cache_get_or_compute(
   $memd,

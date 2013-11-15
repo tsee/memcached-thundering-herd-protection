@@ -1,4 +1,4 @@
-package Cache::Memcached::CattleGrid;
+package Cache::Memcached::Turnstile;
 use 5.10.1;
 use strict;
 use warnings;
@@ -14,6 +14,7 @@ use Time::HiRes ();
 use Data::Dumper qw(Dumper);
 use Constant::FromGlobal qw(DEBUG_DUMPS);
 
+# Default value for the compute_time parameter.
 use constant THUNDER_TIMEOUT => 2;
 
 # Structure of a value: [being-reprocessed-flag, real expiration timestamp, value]
@@ -422,11 +423,11 @@ __END__
 
 =head1 NAME
 
-Cache::Memcached::CattleGrid - Thundering Herd Protection for Memcached Clients
+Cache::Memcached::Turnstile - Thundering Herd Protection for Memcached Clients
 
 =head1 SYNOPSIS
 
-  use Cache::Memcached::CattleGrid qw(:all);
+  use Cache::Memcached::Turnstile qw(:all);
   
   my $memd_client = Cache::Memcached::Fast->new(...);
   
@@ -643,6 +644,8 @@ prior art.
 =head1 AUTHOR
 
 Steffen Mueller, E<lt>smueller@cpan.orgE<gt>
+
+Rafaël Garcia-Suarez, E<lt>rgs@consttype.org<gt>
 
 =head1 ACKNOWLEDGMENT
 
