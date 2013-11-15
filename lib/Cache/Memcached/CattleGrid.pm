@@ -364,7 +364,7 @@ sub multi_cache_get_or_compute {
     my $compute_time = POSIX::ceil($args{compute_time});
     foreach my $i (0..$#keys_to_compute) {
       my $key = $keys_to_compute[$i];
-      my $expire_at = $all_key_expirations{$key};
+      my $expire_at = time() + $all_key_expirations{$key};
       push @set_args, [
         $key,
         [NOT_BEING_PROCESSED, $expire_at, $values[$i]],
