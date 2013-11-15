@@ -29,7 +29,7 @@ my $key_turnstile = "bar";
 $memd->set($key_direct, $value, 0); # do not expire
 $memd->set($key_turnstile, [0, time()+1e9, $value], 0); # do not expire
 
-cmpthese(4000.91, {
+cmpthese(1000.01, {
   direct => sub {
     $memd->get($key_direct);
   },
@@ -43,3 +43,26 @@ cmpthese(4000.91, {
   },
 });
 
+my $nkeys = 10;
+my @k_direct = map {"foo$_"} 1..$nkeys;
+my @k_turnstile = map {["bar$_", 999999]} 1..$nkeys;
+
+my @set_args = (
+  (map [$_->[0], [0, 0, $value], $_->[1]], @k_turnstile),
+  map [$_, $value, 0], @k_direct
+);
+$memd->set_multi(@set_args);
+
+cmpthese(1000.01, {
+  direct => sub {
+    $memd->get_multi(@k_direct);
+  },
+  turnstile => sub {
+    multi_cache_get_or_compute(
+      $memd,
+      keys         => \@k_turnstile,
+      expiration   => 0,
+      compute_cb   => sub { return [($value) x scalar(@{$_[2]}) ] },
+    );
+  },
+});
