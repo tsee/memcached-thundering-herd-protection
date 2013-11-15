@@ -1,5 +1,5 @@
 package Cache::Memcached::CattleGrid;
-use 5.008001;
+use 5.10.1;
 use strict;
 use warnings;
 
@@ -47,7 +47,7 @@ sub cache_get_or_compute {
 
   # memcached says: timeouts >= 30days are timestamps. Yuck.
   # Transform to relative value for sanity for now.
-  my $expiration = $args{expiration};
+  my $expiration = $args{expiration} // 0; # 0 == permanent
   $args{expiration} = $expiration = $expiration - time()
     if $expiration > 30*24*60*60;
 
