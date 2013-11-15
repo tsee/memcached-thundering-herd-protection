@@ -207,7 +207,12 @@ sub multi_cache_get_or_compute {
   # it refers to {compute_time} and wants the original value.
   $args{compute_time} ||= THUNDER_TIMEOUT;
 
-  $args{keys} = Clone::clone($args{keys}); # avoid action at a distance
+  for (@{$args{keys}}) {
+    if ($_->[KEYS_EXPIRE_IDX]> 30*24*60*60) { 
+      $args{keys} = Clone::clone($args{keys}); # avoid action at a distance
+      last;
+    }
+  }
   # memcached says: timeouts >= 30days are timestamps. Yuck.
   # Transform to relative value for sanity for now.
   my %all_key_expirations;
@@ -216,21 +221,19 @@ sub multi_cache_get_or_compute {
     $k_ary->[KEYS_EXPIRE_IDX] = $expiration = $expiration - time()
       if $expiration > 30*24*60*60;
 
-    $all_key_expirations{$k_ary->[KEYS_KEY_IDX]} = $k_ary->[KEYS_EXPIRE_IDX];
+    $all_key_expirations{$k_ary->[KEYS_KEY_IDX]} = $expiration;
   }
 
   my %output_hash;
 
   my @consider_keys = keys %all_key_expirations;
   my $value_hash = $memd->get_multi(@consider_keys);
-  my @all_found_keys = keys %$value_hash;
 
   my @keys_to_attempt; # keys to *attempt* to get a lock for
   my @keys_to_wait_for; # keys to simply wait for (or user-specific logic)
   my @keys_to_cas_update; # keys to do a cas dance on
   my @keys_to_compute; # keys to simply compute (where we already have a lock)
-  KEY_LOOP: while (@consider_keys) {
-    my $key = shift @consider_keys;
+  KEY_LOOP: foreach my $key (@consider_keys) {
     my $val_array = $value_hash->{$key};
 
     # Simply not found - attempt to compute
@@ -244,7 +247,6 @@ sub multi_cache_get_or_compute {
       if (@$val_array >= 3) {
         # All is well, cache hit.
         $output_hash{$key} = $val_array->[VALUE_IDX];
-        delete $value_hash->{$key}; # just sanitation
         next KEY_LOOP;
       }
       else {
