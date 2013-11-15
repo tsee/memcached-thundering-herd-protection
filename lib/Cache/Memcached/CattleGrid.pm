@@ -126,7 +126,7 @@ sub cache_get_or_compute {
 sub _compute_and_set {
   my ($memd, $args) = @_;
 
-  my $real_value = $args->{compute_cb}->();
+  my $real_value = $args->{compute_cb}->($memd, $args);
 
   my $expiration_at = time() + $args->{expiration};
   $memd->set(
