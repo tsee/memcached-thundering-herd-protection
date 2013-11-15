@@ -7,6 +7,7 @@ use warnings;
 use Cache::Memcached::Fast;
 use Sereal::Encoder;
 use Sereal::Decoder;
+use Data::Dumper;
 
 my $enc = Sereal::Encoder->new({
   snappy_incr => 1,
@@ -22,9 +23,11 @@ my $memd = Cache::Memcached::Fast->new({
 
 # TODO Ponder whether compute-time is the conceptual same as the overhang time of the cached value
 
-my @k = map {["k$_", 4]} 1..10;
+my @k = map {["k$_", 16]} 1..3;
+#print Dumper([$memd->get_multi(map $_->[0], @k)]);
+#$memd->delete($_) for map $_->[0], @k;
 
-for (1..0) {
+for (1..5) {
   fork() or last;
 }
 
@@ -34,10 +37,10 @@ use Cache::Memcached::CattleGrid qw(cache_get_or_compute
 my $res = multi_cache_get_or_compute(
   $memd,
   keys => \@k,
-  compute_cb => sub {my ($memd, $args, $keys) = @_; warn "Processing @$keys"; sleep(0.3 * @$keys); return map "V$_", @$keys;},
-  compute_time => 1,
+  compute_cb => sub {my ($memd, $args, $keys) = @_; warn "[$$] Processing @$keys"; sleep(0.2 * @$keys); return map "V$_ ($$)", @$keys;},
+  compute_time => POSIX::ceil(scalar(@k) * 0.2 + 0.3),
 );
-use Data::Dumper; warn Dumper $res;
+use Data::Dumper; warn "[$$] " . Dumper($res);
 
 __END__
 
