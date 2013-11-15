@@ -439,6 +439,17 @@ Cache::Memcached::Turnstile - Thundering Herd Protection for Memcached Clients
     compute_time => 1,
     wait         => 0.1,
   );
+  
+  my $value_hash = multi_cache_get_or_compute(
+    $memd_client,
+    key          => [["foo", 60], ["bar", 120]], # key/expiration pairs
+    compute_cb   => sub {
+      my ($memd_client, $args, $keys_ary) = @_;
+      ... expensive computation...
+      return \@values;
+    },
+    compute_time => 1, # approx computation time per key (see below)
+  );
 
 =head1 DESCRIPTION
 
@@ -629,7 +640,49 @@ the default, then you could use a callback like the following:
 
 =head2 C<multi_cache_get_or_compute>
 
-FIXME document
+This function is the multi-key implementation of the Thundering Herd protection,
+that is, it attempts to minimize the number of client-server roundtrips as much
+as it can and reaches for Memcached's batch interface throughout.
+
+C<multi_cache_get_or_compute> will attempt to fetch or compute the cached value for
+the each of the keys, and will try really hard to avoid more than one user recomputing
+any given cached value at any given time. Most of the interface mimicks that
+of the single-key version as much as possible, but there are some important
+differences highlighted below. As
+
+C<keys> needs to be a reference to an array containing array references of
+key/expiration pairs. C<compute_cb> receives an extra, third, parameter
+as compared to the single-key implementation: A references to an array
+containing the keys for which values need to be computed. (This list of
+keys is possibly only a subset of the original set of keys.) The callback
+needs to return a reference to an array of values which correspond to the
+computed values for each input key in turn.
+
+The C<wait> parameter works fundamentally the same as in the single-key function,
+but the callback variant also receives a third parameter:
+The list of keys whose values weren't available from the cache and couldn't be
+locked for computation. The callback is expected to return a hash reference
+of keys and values. This is different from the C<compute_cb> interface
+to allow for easy calling back into C<multi_cache_get_or_compute> for retries
+(see the C<wait> example for the single-key implementation above).
+
+As with the single-key variant, C<compute_time> is the additional
+cached-value life time for a single value, so should at least be an upper bound
+(or slightly more) on the computation-time for a single key.
+Alas, there is a trade-off here: Since the implementation seeks to
+limit the number of roundtrips as much as possible, it will
+pass all keys-to-be-computed to one run of the C<compute_cb>.
+This means that the computation time can add up to be significantly more
+than the single-key C<compute_time> value, so the C<compute_time>
+parameter may have to be adjusted upwards depending on the situation
+and relative cost. Failing to do so will result in seeing more hard cache
+misses on concurrent use as well as an increase in the number of cache
+entries being recomputed multiple times in parallel, which this module
+aims to avoid in the first place.
+
+In other words, the rule of thumb for the multi-key interface is:
+Be somewhat generous on the C<compute_time> setting and provide
+a separate and appropriate C<wait> time or implementation.
 
 =head1 SEE ALSO
 
