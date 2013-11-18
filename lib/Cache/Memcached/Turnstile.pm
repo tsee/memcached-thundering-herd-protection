@@ -32,9 +32,6 @@ sub cache_get_or_compute {
   # named parameters: key, expiration, compute_cb, compute_time, wait
 
   # FIXME the local thing and recursion is a nasty hack.
-  # FIXME consider not doing the expensive initialization
-  #       here and doing it lazily when needed. That should speed
-  #       up the hot path of cache hits significantly.
   if (!ref($args{wait})) {
     my $wait_time = $args{wait} || $args{compute_time} || 0.1; # 100ms default
     $args{wait} = sub {
@@ -717,7 +714,7 @@ their gratitude.
  (C) 2013 Steffen Mueller. All rights reserved.
  
  This code is available under the same license as Perl version
- 5.8.1 or higher.
+ 5.10.1 or higher.
  
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
